@@ -1,0 +1,76 @@
+{
+  "name": "danku",
+  "description": "DANKU CLI",
+  "version": "0.0.0",
+  "author": "Daniil Kubarenko",
+  "bin": {
+    "danku": "./bin/run.js"
+  },
+  "bugs": "https://github.com/DANKU/danku-cli/issues",
+  "dependencies": {
+    "@oclif/core": "^4.2.10",
+    "@oclif/plugin-help": "^6.2.27",
+    "@oclif/plugin-plugins": "^5.4.36",
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@eslint/compat": "^1.2.8",
+    "@oclif/prettier-config": "^0.2.1",
+    "@oclif/test": "^4.1.12",
+    "@types/chai": "^5.2.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.14.1",
+    "chai": "^5.2.0",
+    "eslint": "^9.25.1",
+    "eslint-config-oclif": "^6.0.46",
+    "eslint-config-prettier": "^10.1.2",
+    "mocha": "^11.1.0",
+    "oclif": "^4.17.46",
+    "shx": "^0.3.4",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.14.0"
+  },
+  "files": [
+    "./bin",
+    "./dist",
+    "./oclif.manifest.json",
+    "templates"
+  ],
+  "homepage": "https://danku.dev/svelte/cli",
+  "keywords": [
+    "danku",
+    "framework"
+  ],
+  "license": "MIT",
+  "main": "dist/index.js",
+  "type": "module",
+  "oclif": {
+    "bin": "danku",
+    "dirname": "danku",
+    "commands": "./dist/commands",
+    "plugins": [
+      "@oclif/plugin-help",
+      "@oclif/plugin-plugins"
+    ],
+    "topicSeparator": " ",
+    "topics": {
+      "hello": {
+        "description": "Say hello to the world and others"
+      }
+    }
+  },
+  "repository": "DANKU/danku-cli",
+  "scripts": {
+    "build": "shx rm -rf dist && tsc -b",
+    "lint": "eslint",
+    "postpack": "shx rm -f oclif.manifest.json",
+    "posttest": "pnpm run lint",
+    "prepack": "oclif manifest && oclif readme",
+    "test": "mocha --forbid-only \"test/**/*.test.ts\"",
+    "version": "oclif readme && git add README.md"
+  },
+  "types": "dist/index.d.ts"
+}

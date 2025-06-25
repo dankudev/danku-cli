@@ -1,0 +1,16 @@
+{
+  "name": "<TBD>",
+  "main": ".svelte-kit/cloudflare/_worker.js",
+  "compatibility_date": "<TBD>",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".svelte-kit/cloudflare"
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  }
+}
