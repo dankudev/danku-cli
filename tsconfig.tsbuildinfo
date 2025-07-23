@@ -1,1 +1,1 @@
-{"root":["./src/index.ts","./src/commands/new.ts","./src/commands/add/component.ts"],"version":"5.8.3"}
+{"root":["./src/base-command.ts","./src/index.ts","./src/commands/new.ts","./src/commands/modules/marketing.ts","./src/commands/modules/saas.ts"],"version":"5.8.3"}

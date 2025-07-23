@@ -4,41 +4,51 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
 
 jobs:
-  deploy:
-    name: Deploy to Production
+  build:
+    name: Build
     environment: Production
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 10
-
       - name: Setup Node.js environment
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: 'pnpm'
-
       - name: Install dependencies
         run: pnpm install
-
       - name: Build project
         env:
-          PUBLIC_BASE_URL: ${{ vars.PUBLIC_BASE_URL }}
+          PUBLIC_BASE_URL: ${{ vars.BASE_URL }}
         run: pnpm run build
+      - name: Upload a Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifacts
+          path: .svelte-kit/cloudflare
 
+  deploy:
+    name: Deploy to Production
+    needs: build
+    environment: Production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Download a Build Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifacts
+          path: .svelte-kit/cloudflare
       - name: Deploy to Cloudflare Workers with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           environment: Production

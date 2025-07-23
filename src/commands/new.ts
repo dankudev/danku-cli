@@ -1,29 +1,81 @@
-import {Args, Command, Flags} from '@oclif/core'
-import { applyEdits, modify } from 'jsonc-parser'
-import { execSync, spawn } from 'node:child_process'
+import { password } from '@inquirer/prompts'
+import { Args, Flags } from '@oclif/core'
 import * as fs from 'node:fs/promises'
-import { EOL } from 'node:os';
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 
-export default class New extends Command {
+import BaseCommand from '../base-command.js'
+
+export default class New extends BaseCommand {
     static override args = {
         name: Args.string({
             description: 'Name of a new SvelteKit project to create',
             required: true
             })
     }
-    static override description = 'Create a new SvelteKit project'
+    static override description = 'Creates a new SvelteKit project with git provider setup and integrated deployment, automatically configuring your chosen platform and creating a repository'
     static override flags = {
-        analytics: Flags.string({description: 'Analytics platform to use', options: ['posthog']}),
-        deployment: Flags.string({default: 'cloudflare', description: 'Platform to deploy the project to', options: ['cloudflare'], required: true}),
-        marketing: Flags.boolean({allowNo: true, default: false, description: 'Whether to apply marketing template or not'}),
+        git: Flags.string({char: 'g', default: 'GitHub', description: 'Git provider for repository hosting', options: ['GitHub']}),
+        target: Flags.string({char: 't', default: 'CloudFlare', description: 'Deployment target (platform)', options: ['CloudFlare']}),
+        url: Flags.string({
+            char: 'u',
+            description: 'Domain where the application will be accessed (must start with https://)',
+            async parse(input) {
+                if (!input.startsWith('https://')) {
+                    throw new Error('URL must start with https://');
+                }
+
+                let url = input.slice(8);
+                while (url.endsWith('/')) {
+                    url = url.slice(0, -1);
+                }
+
+                return url;
+            },
+            required: true
+        })
     }
 
     public async run(): Promise<void> {
-        const { args, flags } = await this.parse(New)
+        const { args, flags } = await this.parse(New);
 
-        this.log(`[DANKU] Creating a new SvelteKit project "${args.name}"`)
+        let directoryExists = true;
+        try {
+            await fs.access(join(process.cwd(), args.name));
+        }
+        catch {
+            directoryExists = false;
+        }
+
+        if (directoryExists) {
+            this.error(`Directory ${args.name} already exists`);
+        }
+
+        const gitToken = await password({
+            mask: true,
+            message: 'Enter your API token for the git provider:',
+            validate: async (input) => {
+                const repositoryExists = await this.gitRepositoryExists(flags.git, input, args.name);
+                if (typeof repositoryExists === 'string') {
+                    return repositoryExists;
+                }
+
+                return repositoryExists ? 'Repository already exists' : true;
+            }
+        });
+
+        // const targetToken = await password({
+        //     mask: true,
+        //     message: 'Enter your API token for the deployment target:',
+        //     async validate(input) {
+        //         if (input.length < 10) {
+        //             return 'API key must be at least 10 characters'
+        //         }
+        //
+        //         return true
+        //     }
+        // });
+
+        this.log(`DANKU🧊 Creating a new SvelteKit project "${args.name}"`);
 
         // 1. Create SvelteKit project
         await this.executeCommand('pnpm dlx', [
@@ -34,7 +86,7 @@ export default class New extends Command {
             '--types',
             'ts',
             '--no-add-ons',
-            '--no-install',
+            '--install pnpm',
             args.name
         ]);
 
@@ -43,7 +95,7 @@ export default class New extends Command {
             'sv',
             'add',
             'devtools-json',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
@@ -51,7 +103,7 @@ export default class New extends Command {
             'sv',
             'add',
             'eslint',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
@@ -59,7 +111,7 @@ export default class New extends Command {
             'sv',
             'add',
             'playwright',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
@@ -67,7 +119,7 @@ export default class New extends Command {
             'sv',
             'add',
             'prettier',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
@@ -75,7 +127,7 @@ export default class New extends Command {
             'sv',
             'add',
             'tailwindcss="plugins:typography,forms"',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
@@ -83,197 +135,80 @@ export default class New extends Command {
             'sv',
             'add',
             'vitest="usages:unit,component"',
-            '--no-install',
+            '--install pnpm',
             '--cwd',
             args.name
         ]);
 
         // 3. Add a correct Adapter and a template based on where this project is deployed to
-        if (flags.deployment === 'cloudflare') {
-            await this.executeCommand('pnpm dlx', [
-                'sv',
-                'add',
-                'sveltekit-adapter=adapter:cloudflare',
-                '--no-install',
-                '--cwd',
-                args.name
-            ]);
-            const templateSrcDir = join(join(dirname(fileURLToPath(import.meta.url)), '..', '..'), 'templates', 'deployment', 'cloudflare');
-            const targetSrcDir = join(process.cwd(), args.name);
-            await fs.cp(templateSrcDir, targetSrcDir, { force: true, recursive: true });
+        switch (flags.target) {
+            default: {
+                await this.executeCommand('pnpm dlx', [
+                    'sv',
+                    'add',
+                    'sveltekit-adapter=adapter:cloudflare',
+                    '--install pnpm',
+                    '--cwd',
+                    args.name
+                ]);
 
-            const packageJsonPath = join(targetSrcDir, 'package.json');
-            let packageJson = await fs.readFile(packageJsonPath, 'utf8');
-            const packageJsonEditGroups = [
-                {
-                    path: ['scripts', 'preview'],
-                    value: "pnpm run build && wrangler dev"
-                },
-                {
-                    path: ['scripts', 'deploy'],
-                    value: "pnpm run build && wrangler deploy"
-                },
-                {
-                    path: ['scripts', 'cf-typegen'],
-                    value: "wrangler types && move worker-configuration.d.ts src/"
-                }
-            ];
-            for (const { path, value } of packageJsonEditGroups) {
-                const edits = modify(packageJson, path, value, {
-                    formattingOptions: { eol: EOL, insertSpaces: true, tabSize: 2 }
-                });
-                packageJson = applyEdits(packageJson, edits);
-            }
+                await this.copyTemplateFiles(`git/${flags.git}/cloudflare`, args.name);
+                await this.copyTemplateFiles('target/cloudflare', args.name);
 
-            await fs.writeFile(packageJsonPath, packageJson);
+                await this.executeCommand('pnpm', ['add', '-D', 'wrangler'], { cwd: args.name });
+                await this.executeCommand('pnpm', ['add', '-D', '@cloudflare/workers-types'], { cwd: args.name });
 
-            await this.executeCommand('pnpm', ['add', '-D', 'wrangler'], { cwd: args.name });
-            await this.executeCommand('pnpm', ['add', '-D', '@cloudflare/workers-types'], { cwd: args.name });
-
-            const tsConfigPath = join(targetSrcDir, 'tsconfig.json');
-            let tsConfig = await fs.readFile(tsConfigPath, 'utf8');
-            const tsConfigEditGroups = [
-                {
-                    path: ['compilerOptions', 'types'],
-                    value: ["@cloudflare/workers-types/2023-07-01"]
-                }
-            ];
-            for (const { path, value } of tsConfigEditGroups) {
-                const edits = modify(tsConfig, path, value, {
-                    formattingOptions: { eol: EOL, insertSpaces: true, tabSize: 4 }
-                });
-                tsConfig = applyEdits(tsConfig, edits);
-            }
-
-            await fs.writeFile(tsConfigPath, tsConfig);
-
-            const wranglerPath = join(targetSrcDir, 'wrangler.jsonc');
-            let wrangler = await fs.readFile(wranglerPath, 'utf8');
-            const wranglerEditGroups = [
-                {
-                    path: ['name'],
-                    value: args.name
-                },
-                {
-                    path: ['compatibility_date'],
-                    value: new Date().toISOString().slice(0, 10)
-                }
-            ];
-            for (const { path, value } of wranglerEditGroups) {
-                const edits = modify(wrangler, path, value, {
-                    formattingOptions: { eol: EOL, insertSpaces: true, tabSize: 4 }
-                });
-                wrangler = applyEdits(wrangler, edits);
-            }
-
-            await fs.writeFile(wranglerPath, wrangler);
-        }
-
-        // 4. Add a marketing template if the flag is enabled
-        if (flags.marketing) {
-            const templateSrcDir = join(join(dirname(fileURLToPath(import.meta.url)), '..', '..'), 'templates', 'marketing');
-            const targetSrcDir = join(process.cwd(), args.name);
-            await fs.cp(templateSrcDir, targetSrcDir, { force: true, recursive: true });
-
-            const layoutPath = join(targetSrcDir, 'src', 'routes', '+layout.svelte');
-            const layout = await fs.readFile(layoutPath, 'utf8');
-            const importsToAdd = `	import { PUBLIC_BASE_URL } from '$env/static/public';
-	import { page } from '$app/state';`;
-            const headContentToAdd = `<svelte:head>
-	<meta property="og:url" content={PUBLIC_BASE_URL + page.url.pathname} />
-	<link rel="canonical" href={PUBLIC_BASE_URL + page.url.pathname} />
-	<meta property="og:description" content={page.data.description} />
-	<meta property="og:image" content={PUBLIC_BASE_URL + '/og.png'} />
-	<meta name="description" content={page.data.description} />
-	<meta property="og:title" content={page.data.title} />
-	<meta property="og:type" content="website" />
-	<title>{page.data.title}</title>
-</svelte:head>`;
-            const scriptTagStart = '<script lang="ts">';
-            const scriptStartPos = layout.indexOf(scriptTagStart);
-            if (scriptStartPos !== -1) {
-                let modifiedLayout = layout;
-                const importInsertPos = scriptStartPos + scriptTagStart.length;
-                modifiedLayout = modifiedLayout.slice(0, importInsertPos) + '\n' + importsToAdd + modifiedLayout.slice(importInsertPos);
-                const newScriptEndPos = modifiedLayout.indexOf('</script>');
-                const headInsertPos = newScriptEndPos + '</script>'.length;
-                modifiedLayout = modifiedLayout.slice(0, headInsertPos) + '\n\n' + headContentToAdd + modifiedLayout.slice(headInsertPos);
-                await fs.writeFile(layoutPath, modifiedLayout, 'utf8');
+                await this.modifyJsonFile('package.json', [
+                    {
+                        path: ['scripts', 'preview'],
+                        value: "vite preview && wrangler dev"
+                    },
+                    {
+                        path: ['scripts', 'cf-typegen'],
+                        value: "wrangler types && move worker-configuration.d.ts src/"
+                    }
+                ], args.name);
+                await this.modifyJsonFile('tsconfig.json', [
+                    {
+                        path: ['compilerOptions', 'types'],
+                        value: ["@cloudflare/workers-types/2023-07-01"]
+                    }
+                ], args.name);
+                await this.modifyJsonFile('wrangler.jsonc', [
+                    {
+                        path: ['name'],
+                        value: args.name
+                    },
+                    {
+                        path: ['compatibility_date'],
+                        value: new Date().toISOString().slice(0, 10)
+                    },
+                    {
+                        path: ['routes', 0, 'pattern'],
+                        value: flags.url
+                    }
+                ], args.name);
             }
         }
 
-        // 5. Add analytics
-        if (flags.analytics === 'posthog') {
-            await this.executeCommand('pnpm', ['add', 'posthog-js'], { cwd: args.name });
+        // 4. Add the default template
+        await this.copyTemplateFiles('default', args.name);
+        await fs.unlink(join(process.cwd(), args.name, 'static', 'favicon.svg'));
 
-            const templateSrcDir = join(join(dirname(fileURLToPath(import.meta.url)), '..', '..'), 'templates', 'analytics', 'posthog');
-            const targetSrcDir = join(process.cwd(), args.name);
-            await fs.cp(templateSrcDir, targetSrcDir, { force: true, recursive: true });
-
-            const layoutPath = join(targetSrcDir, 'src', 'routes', '+layout.svelte');
-            const layout = await fs.readFile(layoutPath, 'utf8');
-            const importsToAdd = `  import { beforeNavigate, afterNavigate } from '$app/navigation';
-  import { browser, dev } from '$app/environment';
-  import posthog from 'posthog-js';`;
-            const postHogCodeToAdd = `  if (browser && !dev) {
-    beforeNavigate(() => posthog.capture('$pageleave'));
-    afterNavigate(() => posthog.capture('$pageview'));
-  }`;
-            const scriptTagStart = '<script lang="ts">';
-            const scriptStartPos = layout.indexOf(scriptTagStart);
-            if (scriptStartPos !== -1) {
-                let modifiedLayout = layout;
-                const importInsertPos = scriptStartPos + scriptTagStart.length;
-                modifiedLayout = modifiedLayout.slice(0, importInsertPos) + '\n' + importsToAdd + modifiedLayout.slice(importInsertPos);
-                const newScriptEndPos = modifiedLayout.indexOf('</script>');
-                modifiedLayout = modifiedLayout.slice(0, newScriptEndPos) + '\n' + postHogCodeToAdd + '\n' + modifiedLayout.slice(newScriptEndPos);
-                await fs.writeFile(layoutPath, modifiedLayout, 'utf8');
-            }
-        }
-
-        // 6. Add a default template
-        const templateSrcDir = join(join(dirname(fileURLToPath(import.meta.url)), '..', '..'), 'templates', 'default');
-        const targetSrcDir = join(process.cwd(), args.name);
-        await fs.unlink(join(targetSrcDir, 'static', 'favicon.png'));
-        await fs.cp(templateSrcDir, targetSrcDir, { force: true, recursive: true });
-
-        // 7. Install dependencies
-        await this.executeCommand('pnpm', ['install'], { cwd: args.name });
-
-        // 8. Create a new GitHub repo
+        // 5. Initialize a new git repo
         await this.executeCommand('git', ['init'], { cwd: args.name });
         await this.executeCommand('git', ['add', '.'], { cwd: args.name });
         await this.executeCommand('git', ['commit', '-m', '"Initial commit"'], { cwd: args.name });
 
-        const username = execSync('gh api user --jq .login', {
-            cwd: args.name,
-            encoding: 'utf8'
-        }).trim();
+        // 6. Create a new git repo and push local to remote
+        const createRepository = await this.gitCreateRepository(flags.git, gitToken, args.name);
+        if (!createRepository.startsWith('https://github.com/')) {
+            this.error(createRepository);
+        }
 
-        await this.executeCommand('gh', ['repo', 'create', args.name, '--private'], { cwd: args.name });
-        await this.executeCommand('git', ['remote', 'add', 'origin', `https://github.com/${username}/${args.name}.git`], { cwd: args.name });
+        await this.executeCommand('git', ['remote', 'add', 'origin', createRepository], { cwd: args.name });
         await this.executeCommand('git', ['push', '-u', 'origin', 'main'], { cwd: args.name });
-    }
 
-    private executeCommand(command: string, args: string[], options: any = {}): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const child = spawn(command, args, {
-                shell: true,
-                stdio: 'inherit',
-                ...options
-            })
-
-            child.on('close', code => {
-                if (code === 0) {
-                    resolve()
-                } else {
-                    reject(new Error(`Command failed with exit code ${code}`))
-                }
-            })
-
-            child.on('error', err => {
-                reject(new Error(`Failed to execute command: ${err.message}`))
-            })
-        })
+        this.log(`DANKU✅ Successfully created SvelteKit project "${args.name}"`);
     }
 }
