@@ -6,8 +6,8 @@ on:
       - main
 
 jobs:
-  build:
-    name: Build
+  build-and-deploy:
+    name: Build and deploy to Production
     environment: Production
     runs-on: ubuntu-latest
     steps:
@@ -28,27 +28,9 @@ jobs:
         env:
           PUBLIC_BASE_URL: ${{ vars.BASE_URL }}
         run: pnpm run build
-      - name: Upload a Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-artifacts
-          path: .svelte-kit/cloudflare
-
-  deploy:
-    name: Deploy to Production
-    needs: build
-    environment: Production
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Download a Build Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: build-artifacts
-          path: .svelte-kit/cloudflare
       - name: Deploy to Cloudflare Workers with Wrangler
         uses: cloudflare/wrangler-action@v3
         with:
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          environment: Production
+          packageManager: pnpm

@@ -5,7 +5,7 @@ Everything you need to build a SvelteKit application, powered by [danku-cli](htt
 ## Prerequisites
 
 - Install [Git](https://git-scm.com/downloads)
-- Create a personal access token with *repo* and *user* scopes on [GitHub](https://github.com/settings/tokens/new)
+- Create a personal access token with *repo* and *user* scopes on [GitHub](https://github.com/settings/personal-access-tokens/new)
 - Create a personal access token on [CloudFlare](https://github.com/settings/tokens/new)
 
 ## Creating a project

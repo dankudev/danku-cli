@@ -1,14 +1,12 @@
 {
-  "name": "<TBD>",
   "main": ".svelte-kit/cloudflare/_worker.js",
-  "compatibility_date": "<TBD>",
+  "preview_urls": false,
   "assets": {
     "binding": "ASSETS",
     "directory": ".svelte-kit/cloudflare"
   },
   "routes": [
     {
-      "pattern": "<TBD>",
       "custom_domain": true
     }
   ],
