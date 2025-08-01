@@ -1,9 +1,9 @@
-import { PUBLIC_BASE_URL } from '$env/static/public';
-import type { RequestHandler } from '@sveltejs/kit';
+import { PUBLIC_BASE_URL } from "$env/static/public";
+import type { RequestHandler } from "@sveltejs/kit";
 
 interface Url {
-	loc: string;
 	lastmod: string;
+	loc: string;
 }
 
 export const GET: RequestHandler = async () => {
@@ -12,7 +12,7 @@ export const GET: RequestHandler = async () => {
 	const currentDate = new Date().toISOString();
 	for (const module in import.meta.glob(
 		[
-			'/src/routes/**/+page.svelte'
+			"/src/routes/**/+page.svelte"
 			// Exclude certain paths e.g.
 			// '!/src/routes/[[]*[]]/**/+page.svelte'
 			// '!/src/routes/app/**/+page.svelte'
@@ -20,11 +20,11 @@ export const GET: RequestHandler = async () => {
 		{ eager: true }
 	)) {
 		urls.push({
+			lastmod: currentDate,
 			loc: module
-				.replace('/src/routes', PUBLIC_BASE_URL)
-				.replaceAll(/\([^)]*\)\//g, '')
-				.replace('/+page.svelte', ''),
-			lastmod: currentDate
+				.replace("/src/routes", PUBLIC_BASE_URL)
+				.replaceAll(/\([^)]*\)\//g, "")
+				.replace("/+page.svelte", "")
 		});
 	}
 
@@ -44,9 +44,7 @@ export const GET: RequestHandler = async () => {
 
 	return new Response(sitemap, {
 		headers: {
-			'Content-Type': 'application/xml'
+			"Content-Type": "application/xml"
 		}
 	});
 };
-
-export const prerender = true;

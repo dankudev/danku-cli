@@ -1,27 +1,17 @@
-import {Args, Command, Flags} from '@oclif/core'
+import { Args } from "@oclif/core";
 
-export default class Components extends Command {
-  static override args = {
-    file: Args.string({description: 'file to read'}),
-  }
-  static override description = 'describe the command here'
-  static override examples = [
-    '<%= config.bin %> <%= command.id %>',
-  ]
-  static override flags = {
-    // flag with no value (-f, --force)
-    force: Flags.boolean({char: 'f'}),
-    // flag with a value (-n, --name=VALUE)
-    name: Flags.string({char: 'n', description: 'name to print'}),
-  }
+import BaseCommand from "../base-command.js";
 
-  public async run(): Promise<void> {
-    const {args, flags} = await this.parse(Components)
+export default class Components extends BaseCommand {
+	static override args = {
+		name: Args.string({
+			description: "Name of a component to create or update",
+			required: true
+		})
+	};
+	static override description = "Creates or updates a component in your SvelteKit project";
 
-    const name = flags.name ?? 'world'
-    this.log(`hello ${name} from S:\\Programming\\DANKU\\danku-cli\\src\\commands\\components.ts`)
-    if (args.file && flags.force) {
-      this.log(`you input --force and --file: ${args.file}`)
-    }
-  }
+	public async run(): Promise<void> {
+		const { args } = await this.parse(Components);
+	}
 }
