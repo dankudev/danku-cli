@@ -31,6 +31,9 @@ importers:
             octokit:
                 specifier: ^3.2.2
                 version: 3.2.2
+            tldts:
+                specifier: ^7.0.10
+                version: 7.0.10
             yaml:
                 specifier: ^2.8.0
                 version: 2.8.0
@@ -5197,6 +5200,19 @@ packages:
             }
         engines: { node: ">=12.0.0" }
 
+    tldts-core@7.0.10:
+        resolution:
+            {
+                integrity: sha512-z7PilFbUHwd+IlQ72D0aHDpqykUUpe9yvwa5k/rFvFLmpvNmWqHEIHoSYwE5sA5LZU4bTTIjhDZEjURHc8f2ag==
+            }
+
+    tldts@7.0.10:
+        resolution:
+            {
+                integrity: sha512-n6xyIpjWEn6Ikpkir7zVdxNoRO3ZrL+x65ztg/JYoIMoPkpRQ87W4RxbNiso+axhF2zTAzwR+NJJE3NJazLb6Q==
+            }
+        hasBin: true
+
     tmp@0.0.33:
         resolution:
             {
@@ -9358,6 +9374,12 @@ snapshots:
         dependencies:
             fdir: 6.4.6(picomatch@4.0.3)
             picomatch: 4.0.3
+
+    tldts-core@7.0.10: {}
+
+    tldts@7.0.10:
+        dependencies:
+            tldts-core: 7.0.10
 
     tmp@0.0.33:
         dependencies:

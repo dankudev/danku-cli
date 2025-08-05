@@ -1,6 +1,5 @@
 import { Args } from "@oclif/core";
 import { type } from "arktype";
-import { configure } from "arktype/config";
 import { parse } from "jsonc-parser";
 import Crypto from "node:crypto";
 import * as fs from "node:fs/promises";
@@ -21,6 +20,7 @@ export default class New extends BaseCommand {
 	static override description =
 		"Creates a new SvelteKit project with git provider setup and integrated deployment, automatically configuring your chosen platform and creating a repository";
 
+	// eslint-disable-next-line complexity
 	public async run(): Promise<void> {
 		const { args } = await this.parse(New);
 
@@ -30,7 +30,7 @@ export default class New extends BaseCommand {
 				cloudFlare: {
 					accountId: "",
 					token: "",
-					url: ""
+					url: new URL("https://my-cute-website.com")
 				}
 			},
 			gitProvider: {
@@ -132,38 +132,64 @@ export default class New extends BaseCommand {
 		// 4. Add default boilerplate
 		await this.copyTemplateFiles("boilerplate/default", args.name);
 
-		// 5. Add marketing boilerplate if needed
-		if (config.boilerplate.marketing) {
-			const addOrUpdateEnvVariable = await this.gitAddOrUpdateEnvVariable(
+		const sharedBetweenMarketingAndSaasFs = async () => {
+			const addOrUpdateEnvVariableBaseUrl = await this.gitAddOrUpdateEnvVariable(
 				config,
 				args.name,
 				"BASE_URL",
 				"http://localhost:5173",
-				config.deploymentTarget.cloudFlare!.url // todo update this
+				config.deploymentTarget.cloudFlare!.url.origin // todo update this
 			);
-			if (typeof addOrUpdateEnvVariable === "string") {
-				this.error(addOrUpdateEnvVariable);
+			if (typeof addOrUpdateEnvVariableBaseUrl === "string") {
+				this.error(addOrUpdateEnvVariableBaseUrl);
+			}
+
+			const addOrUpdateEnvVariablePostHogApiKey = await this.gitAddOrUpdateEnvVariable(
+				config,
+				args.name,
+				"POSTHOG_API_KEY",
+				"",
+				config.boilerplate.marketing?.postHogApiKey || config.boilerplate.saasFs?.postHogApiKey || ""
+			);
+			if (typeof addOrUpdateEnvVariablePostHogApiKey === "string") {
+				this.error(addOrUpdateEnvVariablePostHogApiKey);
+			}
+
+			const createPostHogReverseProxy = await this.targetCreatePostHogReverseProxy(config);
+			if (typeof createPostHogReverseProxy === "string") {
+				this.error(createPostHogReverseProxy);
 			}
 
 			await this.copyTemplateFiles("boilerplate/marketing", args.name);
 			await fs.unlink(join(process.cwd(), args.name, "static", "robots.txt"));
+
+			const layoutFilePath = join(process.cwd(), args.name, "src", "routes", "+layout.ts");
+			let layoutData = await fs.readFile(layoutFilePath, "utf8");
+			layoutData = layoutData.replace('apiHost = "DANKU";', `apiHost = "${createPostHogReverseProxy}";`);
+			await fs.writeFile(layoutFilePath, layoutData, "utf8");
+
+			const svelteConfigFilePath = join(process.cwd(), args.name, "svelte.config.js");
+			let svelteConfigData = await fs.readFile(svelteConfigFilePath, "utf8");
+			svelteConfigData = svelteConfigData.replace(
+				"adapter: adapter()",
+				`adapter: adapter(),
+   paths: {
+     relative: false
+   }`
+			);
+			await fs.writeFile(svelteConfigFilePath, svelteConfigData, "utf8");
+
+			await this.executeCommand("pnpm", ["add", "posthog-js"], { cwd: args.name });
+		};
+
+		// 5. Add marketing boilerplate if needed
+		if (config.boilerplate.marketing) {
+			await sharedBetweenMarketingAndSaasFs();
 		}
 
 		// 6. Add SaaS (Full Stack) boilerplate if needed
 		if (config.boilerplate.saasFs) {
-			const addOrUpdateEnvVariable = await this.gitAddOrUpdateEnvVariable(
-				config,
-				args.name,
-				"BASE_URL",
-				"http://localhost:5173",
-				config.deploymentTarget.cloudFlare!.url // todo update this
-			);
-			if (typeof addOrUpdateEnvVariable === "string") {
-				this.error(addOrUpdateEnvVariable);
-			}
-
-			await this.copyTemplateFiles("boilerplate/marketing", args.name);
-			await fs.unlink(join(process.cwd(), args.name, "static", "robots.txt"));
+			await sharedBetweenMarketingAndSaasFs();
 
 			const devAuthSecret = Crypto.randomBytes(32).toString("hex");
 			const prodAuthSecret = Crypto.randomBytes(32).toString("hex");
@@ -221,7 +247,6 @@ export default class New extends BaseCommand {
       user?: User;
     }`
 			);
-
 			data = data.replace(
 				"// interface Platform {}",
 				`interface Platform {
@@ -257,6 +282,7 @@ import type { User } from '$lib/server/auth';
 			await this.executeCommand("pnpm", ["add", "better-auth"], { cwd: args.name });
 			await this.executeCommand("pnpm", ["add", "@better-auth/stripe"], { cwd: args.name });
 			await this.executeCommand("pnpm", ["add", "stripe"], { cwd: args.name });
+			await this.executeCommand("pnpm", ["add", "posthog-node"], { cwd: args.name });
 			await this.executeCommand("pnpm", ["run", "db:generate"], { cwd: args.name });
 		}
 
@@ -337,7 +363,9 @@ import type { User } from '$lib/server/auth';
 					steps.splice(4, 1, {
 						env: {
 							// eslint-disable-next-line no-template-curly-in-string
-							PUBLIC_BASE_URL: "${{ vars.BASE_URL }}"
+							PUBLIC_BASE_URL: "${{ vars.BASE_URL }}",
+							// eslint-disable-next-line no-template-curly-in-string
+							PUBLIC_POSTHOG_API_KEY: "${{ vars.POSTHOG_API_KEY }}"
 						},
 						name: "Build project",
 						run: "pnpm run build"
@@ -354,6 +382,8 @@ import type { User } from '$lib/server/auth';
 							AUTH_SECRET: "${{ secrets.AUTH_SECRET }}",
 							// eslint-disable-next-line no-template-curly-in-string
 							PUBLIC_BASE_URL: "${{ vars.BASE_URL }}",
+							// eslint-disable-next-line no-template-curly-in-string
+							PUBLIC_POSTHOG_API_KEY: "${{ vars.POSTHOG_API_KEY }}",
 							// eslint-disable-next-line no-template-curly-in-string
 							PUBLIC_STRIPE_PUBLISHABLE_KEY: "${{ vars.STRIPE_PUBLISHABLE_KEY }}",
 							// eslint-disable-next-line no-template-curly-in-string
@@ -463,7 +493,7 @@ import type { User } from '$lib/server/auth';
 					},
 					{
 						path: ["routes", 0, "pattern"],
-						value: config.deploymentTarget.cloudFlare.url.slice(8)
+						value: config.deploymentTarget.cloudFlare.url.hostname
 					}
 				],
 				2,

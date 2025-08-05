@@ -21,9 +21,10 @@ const hook: Hook<"prerun"> = async function (opts) {
 
   "boilerplate": {
   	// "marketing": {
-  	//
+  	//   "postHogApiKey": ""
   	// }
   	// "saasFs": {
+  	//   "postHogApiKey": "",
   	//   "stripePublishableKey": "",
   	//   "stripePublishableKeyDev": "",
   	//   "stripeSecretKey": "",

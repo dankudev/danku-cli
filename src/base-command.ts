@@ -8,6 +8,7 @@ import { EOL } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Octokit, RequestError } from "octokit";
+import { parse } from "tldts";
 
 import { Config } from "./types.js";
 
@@ -409,6 +410,107 @@ export default abstract class BaseCommand extends Command {
 		await fs.writeFile(fullPath, fileContent, "utf8");
 	}
 
+	protected async targetCreatePostHogReverseProxy(config: Config): Promise<string | URL> {
+		if (config.deploymentTarget.cloudFlare) {
+			const script = new File(
+				[
+					`
+const API_HOST = "us.i.posthog.com" // Change to "eu.i.posthog.com" for the EU region
+const ASSET_HOST = "us-assets.i.posthog.com" // Change to "eu-assets.i.posthog.com" for the EU region
+const CORS_HEADERS = {
+  // Access-Control-Allow-Origin: "*"                           ← Permissive (accepts any origin)
+  // └── Replace the asterisk with your site’s origin (e.g. "https://my-cute-website.com")
+  //     if you want to *tighten* your CORS policy and restrict access to your own domain.
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With"
+}
+
+function corsify(resp, extra = {}) {
+  return new Response(resp ? resp.body : null, {
+    status:     resp ? resp.status     : 204,
+    statusText: resp ? resp.statusText : "No Content",
+    headers:    { ...(resp ? resp.headers : {}), ...CORS_HEADERS, ...extra }
+  });
+}
+
+export default {
+  async fetch(request, env, ctx) {
+    const url            = new URL(request.url)
+    const pathname       = url.pathname
+    const pathWithSearch = pathname + url.search
+
+    if (request.method === "OPTIONS") {
+      return corsify(null, { "Access-Control-Max-Age": "86400" });
+    }
+
+    if (pathname.startsWith("/static/")) {
+      let response = await caches.default.match(request)
+      if (!response) {
+        response = await fetch(\`https://\${ASSET_HOST}\${pathWithSearch}\`)
+        ctx.waitUntil(caches.default.put(request, response.clone()))
+      }
+      return corsify(response)
+    } else {
+      const originRequest = new Request(request)
+      originRequest.headers.delete("cookie")
+      const response = await fetch(\`https://\${API_HOST}\${pathWithSearch}\`, originRequest)
+      return corsify(response)
+    }
+  }
+}
+
+`
+				],
+				"index.js",
+				{
+					type: "application/javascript+module"
+				}
+			);
+			const proxyName = "posthog-reverse-proxy";
+			const domain = parse(config.deploymentTarget.cloudFlare.url.origin).domain ?? "";
+			const proxyUrl = new URL(config.deploymentTarget.cloudFlare.url);
+			proxyUrl.hostname = `a.${domain}`;
+
+			try {
+				await this.cloudflare.workers.scripts.update(proxyName, {
+					// eslint-disable-next-line camelcase
+					account_id: config.deploymentTarget.cloudFlare.accountId,
+					files: {
+						"index.js": script
+					},
+					metadata: {
+						// eslint-disable-next-line camelcase
+						compatibility_date: new Date().toISOString().split("T")[0],
+						// eslint-disable-next-line camelcase
+						main_module: "index.js"
+					}
+				});
+				const zones = await this.cloudflare.zones.list({
+					name: domain
+				});
+				await this.cloudflare.workers.domains.update({
+					// eslint-disable-next-line camelcase
+					account_id: config.deploymentTarget.cloudFlare.accountId,
+					environment: "production",
+					hostname: proxyUrl.hostname,
+					service: proxyName,
+					// eslint-disable-next-line camelcase
+					zone_id: zones.result[0].id
+				});
+				return proxyUrl;
+			} catch (error) {
+				if (error instanceof CloudflareError) {
+					return `Failed to create PostHog Reverse Proxy: ${error.message}`;
+				}
+
+				return "Failed to create PostHog Reverse Proxy: Unknown error";
+			}
+		}
+
+		return "Should not be reached";
+	}
+
 	protected async targetCreateResources(config: Config, resourceName: string): Promise<string> {
 		if (config.deploymentTarget.cloudFlare) {
 			try {
@@ -441,6 +543,13 @@ export default abstract class BaseCommand extends Command {
 				});
 				if (verification.status !== "active") {
 					return "Cloudflare API token is not active";
+				}
+
+				const zones = await this.cloudflare.zones.list({
+					name: parse(config.deploymentTarget.cloudFlare.url.origin).domain ?? ""
+				});
+				if (zones.result.length === 0) {
+					return "Cloudflare account does not have a zone with the specified URL";
 				}
 			} catch {
 				return "Invalid Cloudflare account ID or API token";

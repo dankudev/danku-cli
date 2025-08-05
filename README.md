@@ -104,15 +104,28 @@ At most, **one** boilerplate may be configured.
 
 What exactly does this boilerplate do?
 
-- TODO pre-rendering capabilities
+- Pre-renders the application on build to improve speed and reduce server-side rendering costs
 - Adds `<svelte:head>` section inside of `+layout.svelte` with SEO metadata (titles, meta descriptions, etc.) for search engine optimization
 - Adds `/sitemap.xml` and `/robots.txt` pages for better crawlability
 - Adds `/privacy-policy` and `/terms-of-service` pages for legal compliance
-- TODO POSTHOG
+- Adds [PostHog](https://go.danku.dev/posthog) for analytics and error tracking
 
 If you wish to use Marketing boilerplate:
 
 1. Uncomment `marketing` section in your configuration file
+    ```
+    "marketing": {
+       "postHogApiKey": ""
+    }
+    ```
+2. Click [here](https://us.posthog.com/organization/create-project) and then **Create project**
+3. Choose **Web Analytics** and **Error Tracking**, then click **Go**
+4. Click **Copy API key** and paste it into your configuration file
+    ```
+    "marketing": {
+      "postHogApiKey": "<my-posthog-api-key>"
+    }
+    ```
 
 ##### SaaS (Full Stack)
 
@@ -137,18 +150,18 @@ If you wish to use CloudFlare as your deployment target:
 
 1. Uncomment `cloudFlare` section in your configuration file
     ```
-     "cloudFlare": {
-       "accountId": "",
-       "token": "",
-       "url": ""
-     }
+    "cloudFlare": {
+      "accountId": "",
+      "token": "",
+      "url": ""
+    }
     ```
 2. Navigate to your **Account Home**, click the **three-dot icon**, then **Copy account ID**, and finally paste it into your configuration file
     ```
-     "cloudFlare": {
-       "accountId": "<my-cloudflare-account-id>",
-       ...
-     }
+    "cloudFlare": {
+      "accountId": "<my-cloudflare-account-id>",
+      ...
+    }
     ```
 3. Go to **Manage Account > Account API Tokens** and click **Create Token**
 4. Locate a **Edit Cloudflare Workers** template and click **Use template**
@@ -158,20 +171,19 @@ If you wish to use CloudFlare as your deployment target:
 8. Click **Continue to summary** and **Create Token** to create your account API token
 9. Copy your token and paste it into your configuration file
     ```
-     "cloudFlare": {
-       ...
-       "token": "<my-cloudflare-token>",
-       ...
-     }
+    "cloudFlare": {
+      ...
+      "token": "<my-cloudflare-token>",
+      ...
+    }
     ```
-10. Set the `url` value in your configuration file to match the domain (zone) you created in Cloudflare. This should be the exact website URL your application will be served from. Must start with `https://` and NOT end with `/`.
-
-```
- "cloudFlare": {
-   ...
-   "url": "https://my-cute-website.com"
- }
-```
+10. Set the `url` value in your configuration file to match the domain (zone) you created in Cloudflare. This must be a valid URL.
+    ```
+    "cloudFlare": {
+      ...
+      "url": "https://my-cute-website.com"
+    }
+    ```
 
 #### Git provider
 
@@ -183,9 +195,9 @@ If you wish to use GitHub as your Git provider:
 
 1. Uncomment `gitHub` section in your configuration file
     ```
-     "gitHub": {
-       "token": ""
-     }
+    "gitHub": {
+      "token": ""
+    }
     ```
 2. Click [here](https://github.com/settings/personal-access-tokens/new)
 3. Give this token a unique name (e.g. 'danku-cli')
@@ -196,7 +208,7 @@ If you wish to use GitHub as your Git provider:
 8. Click **Generate token** to create your personal access token
 9. Copy your token and paste it into your configuration file
     ```
-     "gitHub": {
-       "token": "<my-github-token>"
-     }
+    "gitHub": {
+      "token": "<my-github-token>"
+    }
     ```

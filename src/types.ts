@@ -3,15 +3,18 @@ import { type } from "arktype";
 export const cloudFlareSchema = type({
 	accountId: "string>0",
 	token: "string>0",
-	url: /^https:\/\/(www\.)?\w+(\.\w+)+.*[^/]$/
+	url: "string.url.parse"
 });
 
 export const gitHubSchema = type({
 	token: "string>0"
 });
 
-export const marketingBoilerplateSchema = type({});
+export const marketingBoilerplateSchema = type({
+	postHogApiKey: "string>0"
+});
 export const saasFsBoilerplateSchema = type({
+	postHogApiKey: "string>0",
 	stripePublishableKey: "string>0",
 	stripePublishableKeyDev: "string>0",
 	stripeSecretKey: "string>0",
